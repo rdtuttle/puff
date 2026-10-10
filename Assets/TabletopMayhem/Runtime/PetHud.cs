@@ -52,7 +52,7 @@ namespace TabletopMayhem
             PetArt.Shape(controls.transform,PrimitiveType.Cube,new Vector3(.305f,-.015f,.006f),new Vector3(.298f,.25f,.004f),new Color(.98f,.89f,.78f),"Controls card");
             PetArt.Shape(controls.transform,PrimitiveType.Cube,new Vector3(.305f,-.015f,0),new Vector3(.287f,.238f,.003f),new Color(1,.969f,.913f),"Controls face");
             var guide=PetArt.Text(controls.transform,
-                "CONTROLS\n\nCare: feed, water, sing, cuddle\nRight grip behind head: backpack\nRight grip: hold / throw item\nRight trigger near Puff: pet her\nMic to Puff: sing\nBlaster trigger: fire   Sword: swing\nLeft grip: pick up Puff\nA: help   B: home\nY tap: move Puff   Y hold: pets\nX: enter / exit Fight Mode\nFight: stick move, A punch, B kick\nLeft trigger: jump   Right trigger: shield\nLeft grip: grab; release to throw\nBomb: throw; rocket: hold / release",
+                "CONTROLS\n\nCare: feed, water, sing, cuddle\nGrip behind shoulder: grab backpack\nPull forward; release to place\nGrip pack handle to move it again\nRight grip: hold / throw item\nRight trigger near Puff: pet her\nMic to Puff: sing\nBlaster trigger: fire   Sword: swing\nLeft grip: pick up Puff\nA: help   B: home\nY tap: move Puff   Y hold: pets\nX: enter / exit Fight Mode\nFight: stick move, A punch, B kick\nLeft trigger: jump   Right trigger: shield\nLeft grip: grab; release to throw\nBomb: throw; rocket: hold / release",
                 new Vector3(.305f,-.022f,-.009f),.0022f,new Color(.40f,.21f,.32f));
             guide.anchor=TextAnchor.MiddleCenter;
             controls.SetActive(false);

@@ -93,6 +93,28 @@ namespace TabletopMayhem.Editor
                 Vector3 rightFinger=rightGlove.FingerTip.parent.forward;
                 Vector3 leftFinger=leftGlove.FingerTip.parent.forward;
                 if(Vector3.Dot(rightFinger,leftFinger)<.95f)throw new Exception("Right and left glove fingers do not point in the same direction");
+                game.SendMessage("TogglePack");
+                var pack=GameObject.Find("Backpack behind head").transform;
+                if(pack.parent!=camera.transform||tray.activeInHierarchy)throw new Exception("Backpack did not stow behind the viewer");
+                left.transform.position=camera.transform.TransformPoint(new Vector3(-.14f,-.16f,-.30f));
+                var grabPack=typeof(PetGame).GetMethod("TryGrabPack",flags);
+                var movePack=typeof(PetGame).GetMethod("UpdatePackPose",flags);
+                if(!(bool)grabPack.Invoke(game,new object[]{left.transform,1}))throw new Exception("Left reach behind shoulder did not grab backpack");
+                left.transform.position=camera.transform.TransformPoint(new Vector3(-.18f,-.10f,.55f));
+                for(int i=0;i<12;i++)movePack.Invoke(game,new object[]{.025f,false,true});
+                if(pack.parent||!tray.activeInHierarchy)throw new Exception("Pulling backpack forward did not open world inventory");
+                Vector3 placedPack=pack.position;
+                movePack.Invoke(game,new object[]{.025f,false,false});
+                if(Vector3.Distance(pack.position,placedPack)>.001f||!tray.activeInHierarchy)throw new Exception("Released backpack did not remain where placed");
+                left.transform.position=pack.TransformPoint(new Vector3(0,.14f,-.015f));
+                if(!(bool)grabPack.Invoke(game,new object[]{left.transform,1}))throw new Exception("Placed backpack could not be grabbed again by its handle");
+                movePack.Invoke(game,new object[]{.025f,false,false});
+                var foods=(Transform[])typeof(PetGame).GetField("foods",flags).GetValue(game);
+                right.transform.position=foods[0].position;
+                game.SendMessage("TryPickFood",new Ray(right.transform.position,camera.transform.forward));
+                if((int)typeof(PetGame).GetField("heldFood",flags).GetValue(game)!=0||!tray.activeInHierarchy)
+                    throw new Exception("Taking an item stowed the placed backpack");
+                game.SendMessage("ReturnFood");
                 camera.Render();texture.ReadPixels(new Rect(0,0,1600,1000),0,0);texture.Apply();
                 File.WriteAllBytes("Art/Blender/unity-glove-preview.png",texture.EncodeToPNG());
                 var pet=(PetSimulation)typeof(PetGame).GetField("pet",flags).GetValue(game);
@@ -167,7 +189,7 @@ namespace TabletopMayhem.Editor
                     throw new Exception("Daily care goal did not award exactly one star");
                 camera.targetTexture=null;RenderTexture.active=null;
                 UnityEngine.Object.DestroyImmediate(texture);UnityEngine.Object.DestroyImmediate(rt);
-                Debug.Log("PET_VISUAL_OK Puff title + care loop HUD + microphone task + stable spawn + pack + gloves + blaster + sword + floor + bean fight + jump + throw");EditorApplication.Exit(0);
+                Debug.Log("PET_VISUAL_OK Puff title + care loop HUD + microphone task + stable spawn + draggable pack + gloves + blaster + sword + floor + bean fight + jump + throw");EditorApplication.Exit(0);
             }
             catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}
         }

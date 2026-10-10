@@ -32,7 +32,7 @@ namespace TabletopMayhem
         PetCareProgress care;
         PetRoster roster;
         RoomWorld room;
-        Transform rig,cameraOffset,rightHand,leftHand,anchor,petRoot,visualPivot,petModel,microphone,packTray,backpack,spawnMarker,spawnBeacon,bondFlower,contactShadow;
+        Transform rig,cameraOffset,rightHand,leftHand,anchor,petRoot,visualPivot,petModel,microphone,packTray,backpack,packFlap,spawnMarker,spawnBeacon,bondFlower,contactShadow;
         Camera view;
         PetMotion motion;
         PetHud hud;
@@ -45,6 +45,9 @@ namespace TabletopMayhem
         AudioSource songSource,squeakSource,moodSource,musicSource;
         AudioClip squeak,moodClip,musicClip,battleMusicClip,stepClip,purrClip;
         bool onQuest,placed,previousTrigger,previousGrip,previousLeftGrip,previousLeftTrigger,previousLeftY,previousReset,previousHelp,headTracked,focusPaused,packOpen;
+        bool packStowed=true,packReleasedThisFrame;
+        int packHeldBy; // 0 free, 1 left hand, 2 right hand
+        Vector3 packFollowVelocity;
         bool heldPet,petFlying,haveHandPositions,restingAtThrow;
         bool titleDismissed,titleWasPressed,awaitStartRelease;
         float titleTime;
@@ -160,7 +163,7 @@ namespace TabletopMayhem
             for(int i=0;i<foods.Length;i++)
             {
                 var food=PetArt.Food(packTray,(FoodKind)i);foods[i]=food;
-                foodHomes[i]=new Vector3((i-2)*.096f,.055f,-.025f);
+                foodHomes[i]=new Vector3((i-2)*.096f,.055f,.035f);
                 food.localPosition=foodHomes[i];
             }
             for(int i=0;i<props.Length;i++)
@@ -218,18 +221,36 @@ namespace TabletopMayhem
         {
             backpack=new GameObject("Backpack behind head").transform;backpack.SetParent(view.transform,false);
             backpack.localPosition=new Vector3(0,-.17f,-.30f);
-            PetArt.Shape(backpack,PrimitiveType.Cube,Vector3.zero,new Vector3(.23f,.24f,.10f),new Color(.79f,.48f,.76f),"Pastel backpack");
-            PetArt.Shape(backpack,PrimitiveType.Cube,new Vector3(0,.02f,-.056f),new Vector3(.18f,.11f,.016f),PetArt.Cream,"Pack flap");
-            packTray=new GameObject("Backpack inventory tray").transform;packTray.SetParent(view.transform,false);
-            packTray.localPosition=new Vector3(.29f,-.20f,.65f);
+            var lavender=new Color(.63f,.42f,.74f);var rim=new Color(.91f,.71f,.89f);var deep=new Color(.35f,.20f,.46f);
+            PetArt.Shape(backpack,PrimitiveType.Sphere,Vector3.zero,new Vector3(.25f,.26f,.12f),lavender,"Rounded fabric pack");
+            PetArt.Shape(backpack,PrimitiveType.Cube,new Vector3(0,-.018f,-.060f),new Vector3(.205f,.175f,.014f),rim,"Front pocket panel");
+            PetArt.Shape(backpack,PrimitiveType.Cube,new Vector3(0,-.018f,-.070f),new Vector3(.188f,.158f,.003f),PetArt.Cream,"Pocket inset");
+            for(int s=-1;s<=1;s+=2)
+            {
+                PetArt.Shape(backpack,PrimitiveType.Capsule,new Vector3(s*.080f,.008f,.065f),new Vector3(.025f,.22f,.026f),deep,"Soft shoulder strap");
+                PetArt.Shape(backpack,PrimitiveType.Sphere,new Vector3(s*.099f,-.012f,-.071f),new Vector3(.009f,.009f,.004f),PetArt.Gold,"Stitched pocket rivet");
+            }
+            var handle=PetArt.Shape(backpack,PrimitiveType.Capsule,new Vector3(0,.143f,0),new Vector3(.095f,.020f,.024f),deep,"Backpack grab handle");
+            handle.transform.localRotation=Quaternion.Euler(0,0,90);
+            packFlap=new GameObject("Backpack hinged flap").transform;packFlap.SetParent(backpack,false);packFlap.localPosition=new Vector3(0,.066f,-.070f);
+            PetArt.Shape(packFlap,PrimitiveType.Cube,new Vector3(0,-.027f,0),new Vector3(.21f,.074f,.013f),lavender,"Rounded flap");
+            PetArt.Shape(packFlap,PrimitiveType.Sphere,new Vector3(0,-.060f,-.010f),new Vector3(.025f,.017f,.009f),PetArt.Gold,"Heart clasp");
+            packTray=new GameObject("Backpack inventory tray").transform;packTray.SetParent(backpack,false);
+            packTray.localPosition=new Vector3(0,-.010f,-.085f);
+            packTray.localRotation=Quaternion.Euler(0,180,0);
             packTray.localScale=Vector3.one*.72f;
-            PetArt.Shape(packTray,PrimitiveType.Cube,new Vector3(0,0,.022f),new Vector3(.63f,.22f,.018f),new Color(.80f,.55f,.78f),"Inventory backing");
-            PetArt.Shape(packTray,PrimitiveType.Cube,new Vector3(0,0,.009f),new Vector3(.61f,.20f,.008f),PetArt.Cream,"Inventory lining");
-            PetArt.Text(packTray,"SNACKS  +  TOYS  +  FIGHT",new Vector3(0,.093f,-.008f),.0026f,PetArt.Ink);
+            PetArt.Shape(packTray,PrimitiveType.Cube,new Vector3(0,0,-.022f),new Vector3(.63f,.22f,.018f),new Color(.80f,.55f,.78f),"Inventory backing");
+            PetArt.Shape(packTray,PrimitiveType.Cube,new Vector3(0,0,-.009f),new Vector3(.61f,.20f,.008f),PetArt.Cream,"Inventory lining");
+            PackLabel("SNACKS  +  TOYS  +  FIGHT",new Vector3(0,.093f,.003f),.0026f);
             string[] labels={"DONUT","BURGER","HOT DOG","COOKIE","WATER","MIC","GUN","SWORD","BOMB","ROCKET"};
-            for(int i=0;i<foods.Length;i++)PetArt.Text(packTray,labels[i],new Vector3((i-2)*.096f,.012f,-.015f),.0018f,PetArt.Ink);
-            for(int i=0;i<props.Length;i++)PetArt.Text(packTray,labels[i+5],new Vector3((i-2)*.115f,-.105f,-.015f),.0019f,PetArt.Ink);
+            for(int i=0;i<foods.Length;i++)PackLabel(labels[i],new Vector3((i-2)*.096f,.012f,.004f),.0018f);
+            for(int i=0;i<props.Length;i++)PackLabel(labels[i+5],new Vector3((i-2)*.115f,-.105f,.004f),.0019f);
             packTray.gameObject.SetActive(false);
+        }
+        void PackLabel(string label,Vector3 position,float size)
+        {
+            var text=PetArt.Text(packTray,label,position,size,PetArt.Ink);
+            text.transform.localRotation=Quaternion.Euler(0,180,0);
         }
         void Update()
         {
@@ -413,6 +434,7 @@ namespace TabletopMayhem
                 previousTrigger=trigger;previousHelp=helpButton;previousReset=reset;previousLeftGrip=leftGrip;previousLeftY=leftY;previousGrip=grip;previousLeftTrigger=leftTrigger;
                 return;
             }
+            UpdatePackPose(frameDt,grip,leftGrip);
             bool fightToggle=Button(left,CommonUsages.primaryButton);
             if(placed&&fightToggle&&!previousFightToggle)
             {
@@ -472,8 +494,8 @@ namespace TabletopMayhem
                 {previousTrigger=trigger;previousGrip=grip;previousLeftGrip=leftGrip;previousLeftTrigger=leftTrigger;previousLeftY=leftY;previousReset=reset;previousHelp=helpButton;return;}
                 if(grip&&!previousGrip)
                 {
-                    if(BehindHead(rightHand.position))TogglePack();
-                    else if(heldFood<0&&heldProp<0&&packOpen){TryPickFood(ray);if(heldFood<0)TryPickProp(ray);}
+                    if(!TryGrabPack(rightHand,2)&&heldFood<0&&heldProp<0&&packOpen)
+                    {TryPickFood(ray);if(heldFood<0)TryPickProp(ray);}
                 }
                 if(heldFood>=0)
                 {
@@ -499,14 +521,14 @@ namespace TabletopMayhem
                     if(touchDwell>.065f){touchDwell=0;PetPuff();}
                 }
                 else touchDwell=0;
-                if(leftGrip&&!previousLeftGrip)TryPickPet();
+                if(leftGrip&&!previousLeftGrip&&!TryGrabPack(leftHand,1))TryPickPet();
                 if(heldPet)
                 {
                     petRoot.position=leftHand.position+leftHand.forward*.10f;
                     if(!leftGrip)ThrowPet();
                 }
                 if(leftTrigger&&!previousLeftTrigger&&!heldPet&&punchCooldown<=0&&Vector3.Distance(leftHand.position,petRoot.position+Vector3.up*.10f)<.22f)PunchPet();
-                if(leftGrip&&!previousLeftGrip&&pet.Action==PetAction.Sleep)pet.Wake();
+                if(leftGrip&&!previousLeftGrip&&packHeldBy!=1&&pet.Action==PetAction.Sleep)pet.Wake();
             }
             previousTrigger=trigger;previousGrip=grip;previousLeftGrip=leftGrip;previousLeftTrigger=leftTrigger;previousLeftY=leftY;previousReset=reset;previousHelp=helpButton;
         }
@@ -517,17 +539,17 @@ namespace TabletopMayhem
         {
             Vector2 stick;if(!left.TryGetFeatureValue(CommonUsages.primary2DAxis,out stick))stick=Vector2.zero;
             bool guarding=trigger&&heldProp<0&&heldFood<0;
-            fight.Controls(stick,guarding,leftGrip);
+            fight.Controls(stick,guarding,leftGrip&&packHeldBy!=1);
             if(punch&&!previousFightPunch)fight.Punch();
             if(kick&&!previousFightKick)fight.Kick();
             if(leftTrigger&&!previousLeftTrigger){fight.Jump();Haptic(.18f,.06f);}
-            if(leftGrip&&!previousLeftGrip){if(fight.Grab())Haptic(.4f,.1f);}
-            if(!leftGrip&&previousLeftGrip){fight.Throw(leftVelocity.sqrMagnitude>.12f?leftVelocity:leftHand.forward*1.4f);Haptic(.28f,.08f);}
+            if(leftGrip&&!previousLeftGrip&&!TryGrabPack(leftHand,1)){if(fight.Grab())Haptic(.4f,.1f);}
+            if(!leftGrip&&previousLeftGrip&&!packReleasedThisFrame){fight.Throw(leftVelocity.sqrMagnitude>.12f?leftVelocity:leftHand.forward*1.4f);Haptic(.28f,.08f);}
             Ray ray=new Ray(rightHand.position,rightHand.forward*aimSign);
             if(grip&&!previousGrip)
             {
-                if(BehindHead(rightHand.position))TogglePack();
-                else if(heldProp<0&&heldFood<0&&packOpen){TryPickFood(ray);if(heldFood<0)TryPickProp(ray);}
+                if(!TryGrabPack(rightHand,2)&&heldProp<0&&heldFood<0&&packOpen)
+                {TryPickFood(ray);if(heldFood<0)TryPickProp(ray);}
             }
             if(heldFood>=0)
             {
@@ -663,9 +685,61 @@ namespace TabletopMayhem
         }
         bool BehindHead(Vector3 hand)
         {var p=view.transform.InverseTransformPoint(hand);return Mathf.Abs(p.x)<.37f&&p.y>-.55f&&p.y<.22f&&p.z<-.09f&&p.z>-.65f;}
+        bool TryGrabPack(Transform hand,int handId)
+        {
+            if(!placed||packHeldBy!=0||heldFood>=0||heldProp>=0||heldPet)return false;
+            bool fromBack=BehindHead(hand.position);
+            Vector3 handle=backpack.TransformPoint(new Vector3(0,.14f,-.015f));
+            bool atHandle=!packStowed&&Vector3.Distance(hand.position,handle)<.17f;
+            if(!fromBack&&!atHandle)return false;
+            backpack.SetParent(null,true);packStowed=false;packHeldBy=handId;packFollowVelocity=Vector3.zero;
+            if(fromBack)backpack.position=hand.position;
+            HapticHand(handId,.24f,.09f);Debug.Log("PET_PACK_GRABBED_"+(handId==1?"LEFT":"RIGHT"));
+            return true;
+        }
+        void UpdatePackPose(float dt,bool rightGrip,bool leftGrip)
+        {
+            packReleasedThisFrame=false;
+            if(packHeldBy==0)return;
+            bool held=packHeldBy==1?leftGrip:rightGrip;
+            if(!held){ReleasePack();return;}
+            Transform hand=packHeldBy==1?leftHand:rightHand;
+            Vector3 goal=hand.position+hand.forward*.055f-Vector3.up*.12f;
+            backpack.position=Vector3.SmoothDamp(backpack.position,goal,ref packFollowVelocity,.045f,4,dt);
+            backpack.rotation=Quaternion.Slerp(backpack.rotation,view.transform.rotation,1-Mathf.Exp(-dt*15));
+            Vector3 eye=view.transform.InverseTransformPoint(backpack.position);
+            bool inFront=eye.z>.24f&&eye.z<1.7f&&Mathf.Abs(eye.x)<eye.z*.95f;
+            if(inFront!=packOpen)
+            {
+                packOpen=inFront;packTray.gameObject.SetActive(packOpen);
+                Debug.Log(packOpen?"PET_PACK_OPEN":"PET_PACK_CLOSED");
+            }
+            packFlap.localRotation=Quaternion.Slerp(packFlap.localRotation,Quaternion.Euler(packOpen?-105:0,0,0),1-Mathf.Exp(-dt*12));
+        }
+        void ReleasePack()
+        {
+            packReleasedThisFrame=true;packHeldBy=0;packFollowVelocity=Vector3.zero;
+            Vector3 eye=view.transform.InverseTransformPoint(backpack.position);
+            if(eye.z<.20f){ClosePack();return;}
+            packOpen=true;packTray.gameObject.SetActive(true);packFlap.localRotation=Quaternion.Euler(-105,0,0);
+            Debug.Log("PET_PACK_PLACED");
+        }
         void TogglePack()
-        {if(heldFood>=0||heldProp>=0)return;packOpen=!packOpen;packTray.gameObject.SetActive(packOpen);Debug.Log(packOpen?"PET_PACK_OPEN":"PET_PACK_CLOSED");}
-        void ClosePack(){packOpen=false;packTray.gameObject.SetActive(false);}
+        {
+            if(heldFood>=0||heldProp>=0)return;
+            if(!packStowed){ClosePack();return;}
+            backpack.SetParent(null,true);backpack.position=view.transform.TransformPoint(new Vector3(0,-.12f,.55f));
+            backpack.rotation=view.transform.rotation;packStowed=false;packHeldBy=0;packOpen=true;
+            packTray.gameObject.SetActive(true);packFlap.localRotation=Quaternion.Euler(-105,0,0);
+            Debug.Log("PET_PACK_OPEN");
+        }
+        void ClosePack()
+        {
+            packHeldBy=0;packStowed=true;packOpen=false;packFollowVelocity=Vector3.zero;
+            backpack.SetParent(view.transform,false);backpack.localPosition=new Vector3(0,-.17f,-.30f);
+            backpack.localRotation=Quaternion.identity;packFlap.localRotation=Quaternion.identity;
+            packTray.gameObject.SetActive(false);Debug.Log("PET_PACK_STOWED");
+        }
         bool AimedAtPet(Ray ray)
         {
             Vector3 belly=petRoot.TransformPoint(new Vector3(0,.09f,.055f));
@@ -697,7 +771,7 @@ namespace TabletopMayhem
             }
             if(best<0){RaycastHit hit;if(Physics.Raycast(ray,out hit,1.2f,1<<FoodLayer,QueryTriggerInteraction.Ignore))
                 for(int i=0;i<foods.Length;i++)if(hit.transform==foods[i]){best=i;break;}}
-            if(best>=0){heldFood=best;foodFlying[best]=false;foods[best].SetParent(null,true);ClosePack();Debug.Log("PET_PACK_GRABBED_"+(FoodKind)best);}
+            if(best>=0){heldFood=best;foodFlying[best]=false;foods[best].SetParent(null,true);Haptic(.13f,.05f);Debug.Log("PET_PACK_GRABBED_"+(FoodKind)best);}
         }
         void FeedHeld()
         {
@@ -725,11 +799,11 @@ namespace TabletopMayhem
             {float d=Vector3.Distance(rightHand.position,props[i].position);if(d<distance){distance=d;best=i;}}
             if(best<0){RaycastHit hit;if(Physics.Raycast(ray,out hit,1.2f,1<<FoodLayer,QueryTriggerInteraction.Ignore))
                 for(int i=0;i<props.Length;i++)if(hit.transform==props[i]){best=i;break;}}
-            if(best>=0){heldProp=best;propFlying[best]=false;props[best].SetParent(null,true);ClosePack();Debug.Log("PET_PACK_GRABBED_PROP_"+best);}
+            if(best>=0){heldProp=best;propFlying[best]=false;props[best].SetParent(null,true);Haptic(.13f,.05f);Debug.Log("PET_PACK_GRABBED_PROP_"+best);}
         }
         void ResetProp(int i)
         {propFlying[i]=false;propFlightTime[i]=0;propVelocity[i]=Vector3.zero;propClosest[i]=100;props[i].SetParent(packTray,false);props[i].localPosition=PropHome(i);props[i].localRotation=Quaternion.identity;if(i==2)haveSwordTip=false;}
-        static Vector3 PropHome(int i){return new Vector3((i-2)*.115f,-.056f,-.025f);}
+        static Vector3 PropHome(int i){return new Vector3((i-2)*.115f,-.056f,.035f);}
         void ThrowProp()
         {
             if(heldProp<0)return;int i=heldProp;heldProp=-1;
@@ -928,6 +1002,8 @@ namespace TabletopMayhem
             {pokeCooldown=.7f;songSource.Stop();songSource.Play();Burst(PetArt.Pink,12);Haptic(.32f,.1f);RecordCare(CareAction.Sing,"SING ALONG!");Debug.Log("PET_SONG_STARTED");}
         }
         void Haptic(float strength,float seconds){if(onQuest)InputDevices.GetDeviceAtXRNode(XRNode.RightHand).SendHapticImpulse(0,strength,seconds);}
+        void HapticHand(int handId,float strength,float seconds)
+        {if(onQuest)InputDevices.GetDeviceAtXRNode(handId==1?XRNode.LeftHand:XRNode.RightHand).SendHapticImpulse(0,strength,seconds);}
         Vector3 MouthWorld(){return petRoot.TransformPoint(new Vector3(0,.105f,.082f));}
         void ReadDesktop()
         {
