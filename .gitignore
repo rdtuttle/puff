@@ -1,0 +1,14 @@
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uilds/
+[Ll]ogs/
+UserSettings/
+.vs/
+*.csproj
+*.sln
+.DS_Store
+Tests/bin/
+Recordings/
+.utmp/
+mono_crash.*.json

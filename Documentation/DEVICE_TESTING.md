@@ -1,0 +1,10 @@
+# Quest 3 smoke test — Puff 3.1.0
+
+1. Install `Builds/PuffQuest.apk` over the existing app. Launch **Puff**. Confirm the new large PUFF title appears, then press any button. Select a pet slot with the left stick and A.
+2. Allow Spatial Data and scan a desk or floor in Quest Space Setup. If the slot has no saved home, aim the right controller at a flat surface. Hold trigger for the faint ray, then release. Confirm Puff appears and remains visible. Close and relaunch the app; if the spatial anchor relocalizes, Puff should return to the same spot. If the room changed or relocalization fails, the placement marker should appear again.
+3. Open the backpack with right grip behind your head. Throw Puff food, water, and the microphone. Bring the right glove fingertip close to her head while pressing trigger to pet her. Confirm care, health, sound, and animation respond. Complete today's care goal and check that the star count increases once.
+4. Press left X. Confirm the humanoid bean rival rises from a gate on the scanned surface. Move Puff with the left stick, punch with A, kick with B, jump with left trigger, and hold right trigger to shield. Verify that repeated punches chain, the kick launches the bean, and the slime shot has a visible windup before firing. Press left grip near the bean to grab it, then release to throw it; try a ring-out at a tabletop edge. Confirm separate fight health bars update.
+5. In Fight Mode, throw a bomb from the backpack; it should explode after five seconds. Pick up the launcher, hold trigger to see its predicted arc, and release to fire a rocket. Check the explosion affects nearby combatants. Left X should return to the calm pet game with the pet's care progress intact.
+6. Test reset B, tap Y to relocate, hold Y for the roster, and reopen multiple save slots. The real-time age and needs should remain separate by slot.
+
+The Unity editor check covers the title, HUD, stable spawn flow, care items, and fight setup. Spatial-anchor restore, controller feel, and real-world surface interaction require this on-device test.
