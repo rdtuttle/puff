@@ -1,7 +1,22 @@
 {
   "Puff": {
-    "triangles": 24096,
+    "triangles": 26920,
     "articulated_meshes": 7,
     "height_m": 0.19
+  },
+  "KarateComet": {
+    "triangles": 16000,
+    "articulated_meshes": 5,
+    "height_m": 0.23
+  },
+  "Clawstorm": {
+    "triangles": 18228,
+    "articulated_meshes": 5,
+    "height_m": 0.18
+  },
+  "MeatballMarauder": {
+    "triangles": 18264,
+    "articulated_meshes": 5,
+    "height_m": 0.18
   }
 }

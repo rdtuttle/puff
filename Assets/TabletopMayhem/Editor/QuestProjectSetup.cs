@@ -77,7 +77,7 @@ namespace TabletopMayhem.Editor
             PlayerSettings.companyName = "Tabletop Mayhem";
             PlayerSettings.productName = "Puff";
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.tabletopmayhem.quest");
-            PlayerSettings.bundleVersion = "3.2.0"; PlayerSettings.Android.bundleVersionCode = 24;
+            PlayerSettings.bundleVersion = "3.3.0"; PlayerSettings.Android.bundleVersionCode = 25;
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel32;

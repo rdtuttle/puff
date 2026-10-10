@@ -1109,14 +1109,15 @@ namespace TabletopMayhem
             else if(pet.Action==PetAction.Sleep){roll=86;lift=-.010f;}
             else if(walking)lift=Mathf.Abs(Mathf.Sin(Time.time*12))*.009f;
             if(!fight.Active)petRoot.rotation=Quaternion.Euler(0,heading+danceYaw,0);
-            visualPivot.localPosition=new Vector3(0,.102f+lift,0);visualPivot.localRotation=Quaternion.Euler(pitch,0,roll);
+            visualPivot.localPosition=new Vector3(0,.102f+(fight.Active?0:lift),0);
+            if(!fight.Active)visualPivot.localRotation=Quaternion.Euler(pitch,0,roll);
             microphone.gameObject.SetActive(pet.Action==PetAction.Sing);
             sleepLabel.gameObject.SetActive(pet.Action==PetAction.Sleep);
-            motion.Pose(pet,speed,songSource,dt);
+            if(!fight.Active)motion.Pose(pet,speed,songSource,dt);
         }
         void UpdateHud()
         {
-            bool show=placed||!onQuest;hud.Update(pet,care,ActiveProfile,show);hud.SetDaily(dailyStars,DailyName(dailyGoal),dailyDone);help.gameObject.SetActive(!placed);
+            bool show=placed||!onQuest;hud.Update(pet,care,ActiveProfile,show&&!fight.Active);hud.SetDaily(dailyStars,DailyName(dailyGoal),dailyDone);help.gameObject.SetActive(!placed);
             help.transform.localPosition=new Vector3(0,.18f,.18f);
             if(!placed)help.text=room.Ready?"AIM AT A SCANNED DESK OR FLOOR + RIGHT TRIGGER / A":"ALLOW SPATIAL DATA / LEFT GRIP TO SCAN YOUR ROOM";
             else help.text="";

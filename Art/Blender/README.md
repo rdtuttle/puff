@@ -1,3 +1,3 @@
-# Pet model
+# Fighter models
 
-`Puff.blend` is the editable character source. `create_pet.py` generates the FBX at `Assets/TabletopMayhem/Resources/Fighters/Puff.fbx` and two previews, one awake and one asleep. The FBX has seven independently animated parts and uses vertex colors so no external texture files are needed. The editable model is the source for Puff's 3D appearance.
+`Puff.blend` is the editable source for Puff and the three tabletop challengers. Run `create_pet.py` in Blender to regenerate `Puff.fbx`, `KarateComet.fbx`, `Clawstorm.fbx`, and `MeatballMarauder.fbx` in `Assets/TabletopMayhem/Resources/Fighters/`, plus their studio previews. The models use vertex colors, so the Quest build does not need external texture files. Puff has seven animated mesh parts; each rival has independently animated body, arm, and leg parts.

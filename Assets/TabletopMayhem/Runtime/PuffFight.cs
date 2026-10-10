@@ -13,24 +13,49 @@ namespace TabletopMayhem
             public Vector3 Velocity;
             public float Age;
             public float Fuse;
-            public int Kind; // 0 slime, 1 bomb, 2 rocket, 3 burst
+            public float Radius;
+            public Color Tint;
+            public int Kind; // 0 rival projectile, 1 bomb, 2 rocket, 3 spark, 4 shockwave
+        }
+        sealed class EnemyAvatar
+        {
+            public string Name,ShortName;
+            public Transform Root,LeftArm,RightArm,Head,LeftLeg,RightLeg,Body;
+            public Quaternion BodyRest,HeadRest,LeftArmRest,RightArmRest,LeftLegRest,RightLegRest;
+            public float MaxHealth,Speed;
+            public Color Spark,Projectile;
         }
 
         readonly Transform arena, puff, camera;
         readonly RoomWorld room;
         readonly List<MovingEffect> effects=new List<MovingEffect>();
-        readonly Transform enemy,pipe,pipeRim,enemyLeft,enemyRight,enemyHead,enemyLegLeft,enemyLegRight,enemyBody;
+        readonly Transform pipe,pipeRim;
+        readonly EnemyAvatar[] opponents=new EnemyAvatar[3];
+        EnemyAvatar current;
+        Transform enemy { get { return current.Root; } }
+        Transform enemyLeft { get { return current.LeftArm; } }
+        Transform enemyRight { get { return current.RightArm; } }
+        Transform enemyHead { get { return current.Head; } }
+        Transform enemyLegLeft { get { return current.LeftLeg; } }
+        Transform enemyLegRight { get { return current.RightLeg; } }
+        Transform enemyBody { get { return current.Body; } }
         readonly Transform playerLeft,playerRight,playerLegLeft,playerLegRight;
+        readonly Quaternion playerLeftRest,playerRightRest,playerLegLeftRest,playerLegRightRest;
+        readonly Transform playerVisual;
+        readonly LineRenderer outerRing,innerRing,pulseRing;
+        readonly List<LineRenderer> arenaGrid=new List<LineRenderer>();
         readonly TextMesh status;
         readonly Transform puffBar,gloomBar,guardBar;
         readonly AudioSource audio;
-        readonly AudioClip impact,explosion,whoosh,jumpSound,grabSound,beanVoice;
+        readonly AudioClip impact,explosion,whoosh,jumpSound,grabSound,arenaSweep;
+        readonly AudioClip[] voices=new AudioClip[3];
         Vector2 move;
         float spawnTime,enemyAttack,enemyMelee,playerCooldown,playerPose,enemyPose,stun,screenTime;
         float enemyHealth=150,playerHealth=100;
         float guardEnergy=100,guardBreak;
         float jumpHeight,jumpVelocity,attackAge,hitPause,comboWindow,enemyWindup,enemyAir,enemyVertical,grabTime;
-        int comboCount;
+        int comboCount,wave;
+        float arenaRadius;Vector3 arenaCenter;
         bool holdingEnemy,airAttack,enemyRingOut;
         bool shield,grab,finished,strikeReady;
         float strikeDuration,strikeDamage,strikeRange;
@@ -52,71 +77,146 @@ namespace TabletopMayhem
                 PetArt.Shape(pipe,PrimitiveType.Sphere,new Vector3(Mathf.Sin(a)*.095f,.084f,Mathf.Cos(a)*.095f),
                     Vector3.one*.013f,new Color(.77f,.27f,.98f),"Gate rune");
             }
-            enemy=new GameObject("The Bean Revenant").transform;enemy.SetParent(arena,false);
-            var bean=new Color(.42f,.16f,.10f);var warm=new Color(.67f,.32f,.20f);var flesh=new Color(.74f,.47f,.34f);var shadow=new Color(.16f,.08f,.08f);var eyes=new Color(.98f,.66f,.25f);
-            enemyBody=PetArt.Shape(enemy,PrimitiveType.Sphere,new Vector3(0,.265f,0),new Vector3(.24f,.36f,.19f),bean,"Glossy kidney bean body").transform;
-            PetArt.Shape(enemyBody,PrimitiveType.Sphere,new Vector3(-.30f,.22f,-.12f),new Vector3(.52f,.62f,.32f),warm,"Bean highlight");
-            enemyHead=new GameObject("Human face").transform;enemyHead.SetParent(enemy,false);enemyHead.localPosition=new Vector3(0,.405f,.105f);
-            PetArt.Shape(enemyHead,PrimitiveType.Sphere,Vector3.zero,new Vector3(.126f,.148f,.095f),flesh,"Bald head");
-            PetArt.Shape(enemyHead,PrimitiveType.Sphere,new Vector3(0,-.077f,.062f),new Vector3(.094f,.045f,.046f),shadow,"Dark beard");
-            PetArt.Shape(enemyHead,PrimitiveType.Sphere,new Vector3(0,-.018f,.087f),new Vector3(.029f,.037f,.028f),flesh,"Nose");
-            PetArt.Shape(enemyHead,PrimitiveType.Sphere,new Vector3(0,-.080f,.10f),new Vector3(.052f,.011f,.009f),new Color(.29f,.09f,.08f),"Creepy frown");
-            for(int s=-1;s<=1;s+=2)
-            {
-                PetArt.Shape(enemyHead,PrimitiveType.Sphere,new Vector3(s*.048f,.021f,.071f),new Vector3(.026f,.013f,.010f),shadow,"Deep eye socket");
-                PetArt.Shape(enemyHead,PrimitiveType.Sphere,new Vector3(s*.048f,.020f,.080f),new Vector3(.010f,.008f,.006f),eyes,"Glowing amber eye");
-                PetArt.Shape(enemyHead,PrimitiveType.Sphere,new Vector3(s*.12f,-.012f,-.005f),new Vector3(.026f,.043f,.024f),flesh,"Ear");
-            }
-            enemyLeft=new GameObject("Left bean arm").transform;enemyLeft.SetParent(enemy,false);enemyLeft.localPosition=new Vector3(-.112f,.27f,0);
-            enemyRight=new GameObject("Right bean arm").transform;enemyRight.SetParent(enemy,false);enemyRight.localPosition=new Vector3(.112f,.27f,0);
-            PetArt.Shape(enemyLeft,PrimitiveType.Capsule,new Vector3(-.065f,-.075f,.01f),new Vector3(.038f,.105f,.04f),flesh,"Left arm");
-            PetArt.Shape(enemyRight,PrimitiveType.Capsule,new Vector3(.065f,-.075f,.01f),new Vector3(.038f,.105f,.04f),flesh,"Right arm");
-            PetArt.Shape(enemyRight,PrimitiveType.Sphere,new Vector3(.073f,-.145f,.015f),Vector3.one*.044f,new Color(.35f,.91f,.27f),"Slime fist");
-            enemyLegLeft=new GameObject("Left bean leg").transform;enemyLegLeft.SetParent(enemy,false);enemyLegLeft.localPosition=new Vector3(-.065f,.09f,0);
-            enemyLegRight=new GameObject("Right bean leg").transform;enemyLegRight.SetParent(enemy,false);enemyLegRight.localPosition=new Vector3(.065f,.09f,0);
-            PetArt.Shape(enemyLegLeft,PrimitiveType.Capsule,new Vector3(0,-.047f,0),new Vector3(.043f,.092f,.05f),flesh,"Left little leg");
-            PetArt.Shape(enemyLegRight,PrimitiveType.Capsule,new Vector3(0,-.047f,0),new Vector3(.043f,.092f,.05f),flesh,"Right little leg");
-            PetArt.Shape(enemyLegLeft,PrimitiveType.Sphere,new Vector3(0,-.090f,.024f),new Vector3(.076f,.027f,.10f),flesh,"Left foot");
-            PetArt.Shape(enemyLegRight,PrimitiveType.Sphere,new Vector3(0,-.090f,.024f),new Vector3(.076f,.027f,.10f),flesh,"Right foot");
+            opponents[0]=CreateAvatar("KarateComet","Karate Comet","COMET",150,.17f,new Color(1,.57f,.28f),new Color(1,.66f,.25f));
+            opponents[1]=CreateAvatar("Clawstorm","Clawstorm Cat","CAT",130,.23f,new Color(1,.79f,.37f),new Color(.98f,.45f,.20f));
+            opponents[2]=CreateAvatar("MeatballMarauder","Meatball Marauder","MEATBALL",165,.11f,new Color(1,.40f,.25f),new Color(.95f,.18f,.14f));
+            current=opponents[0];
             playerLeft=Find(puff,"LeftArm");playerRight=Find(puff,"RightArm");
             playerLegLeft=Find(puff,"LeftLeg");playerLegRight=Find(puff,"RightLeg");
-            var card=new GameObject("Combat score").transform;card.SetParent(camera,false);card.localPosition=new Vector3(.38f,.25f,.82f);card.localScale=Vector3.one*.58f;
-            PetArt.Shape(card,PrimitiveType.Cube,Vector3.zero,new Vector3(.43f,.11f,.006f),new Color(.13f,.08f,.19f),"Combat score backing");
-            status=PetArt.Text(card,"PUFF 100   VS   BEAN 100",new Vector3(0,.020f,-.008f),.0037f,PetArt.Cream);
+            playerLeftRest=playerLeft?playerLeft.localRotation:Quaternion.identity;
+            playerRightRest=playerRight?playerRight.localRotation:Quaternion.identity;
+            playerLegLeftRest=playerLegLeft?playerLegLeft.localRotation:Quaternion.identity;
+            playerLegRightRest=playerLegRight?playerLegRight.localRotation:Quaternion.identity;
+            playerVisual=Find(puff,"Animation center");
+            outerRing=MakeRing("Blue holographic arena ring",.007f,new Color(.18f,.70f,1,.90f));
+            innerRing=MakeRing("Arena inner ring",.003f,new Color(.30f,.88f,1,.55f));
+            pulseRing=MakeRing("Expanding fight start pulse",.014f,new Color(.48f,.92f,1,.85f));
+            for(int i=0;i<14;i++)arenaGrid.Add(MakeRing("Arena grid line "+i,.0017f,new Color(.24f,.69f,1,.27f),2));
+            var card=new GameObject("Neon combat score").transform;card.SetParent(camera,false);card.localPosition=new Vector3(.30f,.25f,.82f);card.localScale=Vector3.one*.62f;
+            PetArt.Shape(card,PrimitiveType.Cube,Vector3.zero,new Vector3(.53f,.13f,.007f),new Color(.23f,.72f,1),"Neon score edge");
+            PetArt.Shape(card,PrimitiveType.Cube,new Vector3(0,0,-.005f),new Vector3(.52f,.12f,.004f),new Color(.06f,.07f,.16f),"Dark translucent score face");
+            status=PetArt.Text(card,"ROUND 1   PUFF 100  /  COMET 150",new Vector3(0,.027f,-.011f),.0032f,PetArt.Cream);
             status.fontStyle=FontStyle.Bold;
-            PetArt.Shape(card,PrimitiveType.Cube,new Vector3(-.105f,-.029f,-.006f),new Vector3(.17f,.016f,.003f),new Color(.32f,.27f,.39f),"Puff health track");
-            PetArt.Shape(card,PrimitiveType.Cube,new Vector3(.105f,-.029f,-.006f),new Vector3(.17f,.016f,.003f),new Color(.32f,.27f,.39f),"Bean health track");
-            puffBar=PetArt.Shape(card,PrimitiveType.Cube,new Vector3(-.105f,-.029f,-.010f),new Vector3(.17f,.014f,.003f),PetArt.Pink,"Puff fight health").transform;
-            gloomBar=PetArt.Shape(card,PrimitiveType.Cube,new Vector3(.105f,-.029f,-.010f),new Vector3(.17f,.014f,.003f),new Color(.65f,.30f,.93f),"Bean fight health").transform;
-            PetArt.Shape(card,PrimitiveType.Cube,new Vector3(0,-.050f,-.006f),new Vector3(.38f,.006f,.003f),new Color(.26f,.25f,.37f),"Shield energy track");
-            guardBar=PetArt.Shape(card,PrimitiveType.Cube,new Vector3(0,-.050f,-.010f),new Vector3(.38f,.005f,.003f),new Color(.38f,.88f,1),"Shield energy").transform;
+            PetArt.Shape(card,PrimitiveType.Cube,new Vector3(-.125f,-.017f,-.009f),new Vector3(.21f,.018f,.003f),new Color(.24f,.27f,.39f),"Puff health track");
+            PetArt.Shape(card,PrimitiveType.Cube,new Vector3(.125f,-.017f,-.009f),new Vector3(.21f,.018f,.003f),new Color(.24f,.27f,.39f),"Rival health track");
+            puffBar=PetArt.Shape(card,PrimitiveType.Cube,new Vector3(-.125f,-.017f,-.013f),new Vector3(.21f,.016f,.003f),PetArt.Pink,"Puff fight health").transform;
+            gloomBar=PetArt.Shape(card,PrimitiveType.Cube,new Vector3(.125f,-.017f,-.013f),new Vector3(.21f,.016f,.003f),new Color(.96f,.37f,.41f),"Rival fight health").transform;
+            PetArt.Shape(card,PrimitiveType.Cube,new Vector3(0,-.049f,-.009f),new Vector3(.46f,.008f,.003f),new Color(.18f,.24f,.34f),"Shield energy track");
+            guardBar=PetArt.Shape(card,PrimitiveType.Cube,new Vector3(0,-.049f,-.013f),new Vector3(.46f,.007f,.003f),new Color(.38f,.88f,1),"Shield energy").transform;
             audio=pipe.gameObject.AddComponent<AudioSource>();audio.spatialBlend=.6f;
-            impact=Tone("Soft combat impact",155,.19f);
-            explosion=Tone("Silly explosion",85,.42f);
-            whoosh=Tone("Fast swipe",460,.13f);jumpSound=Tone("Jump pop",580,.18f);
-            grabSound=Tone("Grab and throw",210,.27f);beanVoice=Tone("Bean growl",95,.32f);
-            pipe.gameObject.SetActive(false);enemy.gameObject.SetActive(false);card.gameObject.SetActive(false);
+            impact=Noise("Punch impact",135,.22f,.55f);
+            explosion=Noise("Arcade explosion",78,.55f,.82f);
+            whoosh=Noise("Fast swipe",420,.19f,.68f);jumpSound=Tone("Jump pop",580,.18f);
+            grabSound=Tone("Grab and throw",210,.27f);arenaSweep=Tone("Arena sweep",360,.55f);
+            voices[0]=Tone("Karate shout",210,.22f);voices[1]=Tone("Cat yowl",450,.30f);voices[2]=Tone("Meatball rumble",115,.35f);
+            pipe.gameObject.SetActive(false);foreach(var fighter in opponents)fighter.Root.gameObject.SetActive(false);
+            card.gameObject.SetActive(false);SetArenaVisible(false);
         }
         static Transform Find(Transform root,string name)
         {foreach(var t in root.GetComponentsInChildren<Transform>(true))if(t.name==name)return t;return null;}
+        EnemyAvatar CreateAvatar(string resource,string name,string shortName,float health,float speed,Color spark,Color projectile)
+        {
+            var root=PetArt.Fighter(arena,resource,name);
+            var avatar=new EnemyAvatar{Root=root,Name=name,ShortName=shortName,MaxHealth=health,Speed=speed,Spark=spark,Projectile=projectile,
+                Body=Find(root,"Body"),Head=Find(root,"Head"),LeftArm=Find(root,"LeftArm"),RightArm=Find(root,"RightArm"),
+                LeftLeg=Find(root,"LeftLeg"),RightLeg=Find(root,"RightLeg")};
+            avatar.BodyRest=avatar.Body?avatar.Body.localRotation:Quaternion.identity;
+            avatar.HeadRest=avatar.Head?avatar.Head.localRotation:Quaternion.identity;
+            avatar.LeftArmRest=avatar.LeftArm?avatar.LeftArm.localRotation:Quaternion.identity;
+            avatar.RightArmRest=avatar.RightArm?avatar.RightArm.localRotation:Quaternion.identity;
+            avatar.LeftLegRest=avatar.LeftLeg?avatar.LeftLeg.localRotation:Quaternion.identity;
+            avatar.RightLegRest=avatar.RightLeg?avatar.RightLeg.localRotation:Quaternion.identity;
+            return avatar;
+        }
+        LineRenderer MakeRing(string name,float width,Color color,int points=72)
+        {
+            var go=new GameObject(name);go.transform.SetParent(arena,false);
+            var line=go.AddComponent<LineRenderer>();line.useWorldSpace=false;line.positionCount=points;line.loop=points>2;
+            line.widthMultiplier=width;line.numCornerVertices=2;line.numCapVertices=2;
+            line.material=new Material(Resources.Load<Shader>("PetAimLine"));line.startColor=line.endColor=color;
+            return line;
+        }
+        void SetArenaVisible(bool show)
+        {
+            outerRing.gameObject.SetActive(show);innerRing.gameObject.SetActive(show);pulseRing.gameObject.SetActive(show);
+            foreach(var line in arenaGrid)line.gameObject.SetActive(show);
+        }
+        void DrawRing(LineRenderer line,float radius,float y)
+        {
+            for(int i=0;i<line.positionCount;i++)
+            {
+                float a=i*2*Mathf.PI/line.positionCount;
+                line.SetPosition(i,new Vector3(arenaCenter.x+Mathf.Cos(a)*radius,y,arenaCenter.z+Mathf.Sin(a)*radius));
+            }
+        }
+        float FindArenaRadius()
+        {
+            for(float radius=.70f;radius>=.34f;radius-=.045f)
+            {
+                bool supported=true;
+                for(int i=0;i<16;i++)
+                {
+                    float a=i*Mathf.PI/8;float h;
+                    if(!room.Ground(arenaCenter.x+Mathf.Cos(a)*radius,arenaCenter.z+Mathf.Sin(a)*radius,arenaCenter.y+.45f,out h)||Mathf.Abs(h-arenaCenter.y)>.09f)
+                    {supported=false;break;}
+                }
+                if(supported)return radius;
+            }
+            return .35f;
+        }
+        void SetArenaGrid()
+        {
+            for(int i=0;i<arenaGrid.Count;i++)
+            {
+                bool alongX=i<7;int index=i%7-3;float offset=index*arenaRadius/4f;
+                float reach=Mathf.Sqrt(Mathf.Max(0,arenaRadius*arenaRadius-offset*offset));
+                var line=arenaGrid[i];float y=arenaCenter.y+.012f;
+                line.SetPosition(0,new Vector3(arenaCenter.x+(alongX?-reach:offset),y,arenaCenter.z+(alongX?offset:-reach)));
+                line.SetPosition(1,new Vector3(arenaCenter.x+(alongX?reach:offset),y,arenaCenter.z+(alongX?offset:reach)));
+            }
+        }
+        void UpdateArena()
+        {
+            float reveal=Mathf.SmoothStep(0,1,Mathf.Clamp01(spawnTime/.85f));
+            float y=arenaCenter.y+.014f;
+            DrawRing(outerRing,Mathf.Max(.004f,arenaRadius*reveal),y);
+            DrawRing(innerRing,Mathf.Max(.004f,arenaRadius*.69f*reveal),y+.003f);
+            float pulse=Mathf.Clamp01(spawnTime/.70f);
+            DrawRing(pulseRing,Mathf.Max(.004f,arenaRadius*pulse),y+.006f);
+            Color c=new Color(.53f,.91f,1,.8f*(1-pulse));pulseRing.startColor=pulseRing.endColor=c;
+            foreach(var line in arenaGrid)line.enabled=spawnTime>.45f;
+        }
         static AudioClip Tone(string name,float hz,float seconds)
         {
             const int rate=22050;int n=(int)(rate*seconds);float[] samples=new float[n];
             for(int i=0;i<n;i++){float t=(float)i/rate;float e=Mathf.Exp(-t*12);samples[i]=(Mathf.Sin(t*hz*6.28318f*(1-t*.55f))*.7f+Mathf.Sin(t*hz*2.01f*6.28318f)*.3f)*e*.24f;}
             var c=AudioClip.Create(name,n,1,rate,false);c.SetData(samples,0);return c;
         }
+        static AudioClip Noise(string name,float hz,float seconds,float noiseMix)
+        {
+            const int rate=22050;int count=(int)(seconds*rate);float[] samples=new float[count];uint seed=2463534242u;
+            for(int i=0;i<count;i++)
+            {
+                float t=(float)i/rate,p=(float)i/count;seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;
+                float hiss=(seed&65535)/32768f-1f;
+                float body=Mathf.Sin(t*hz*6.28318f*(1-p*.75f));
+                float envelope=Mathf.Pow(1-p,2.2f)*(name.Contains("swipe")?Mathf.Min(1,p*22):1);
+                samples[i]=Mathf.Clamp((body*(1-noiseMix)+hiss*noiseMix)*envelope*.45f,-1,1);
+            }
+            var clip=AudioClip.Create(name,count,1,rate,false);clip.SetData(samples,0);return clip;
+        }
         public void Begin()
         {
             if(Active)return;
-            Active=true;finished=false;enemyHealth=150;playerHealth=100;
+            Active=true;finished=false;wave=0;current=opponents[wave];enemyHealth=current.MaxHealth;playerHealth=100;
             spawnTime=0;enemyAttack=2.8f;enemyMelee=1.3f;stun=0;pose=0;playerPose=0;guardEnergy=100;guardBreak=0;
             jumpHeight=jumpVelocity=enemyAir=enemyVertical=hitPause=enemyWindup=grabTime=0;
             holdingEnemy=enemyRingOut=airAttack=false;comboCount=0;comboWindow=0;
             move=Vector2.zero;shield=grab=false;
             strikeReady=false;
-            Vector3 forward=camera.forward;forward.y=0;
-            if(forward.sqrMagnitude<.001f)forward=arena.forward;
-            Vector3 local=arena.InverseTransformDirection(forward.normalized);
+            Vector3 side=camera.right;side.y=0;
+            if(side.sqrMagnitude<.001f)side=arena.right;
+            Vector3 local=arena.InverseTransformDirection(side.normalized);
             Vector3 chosen=puff.localPosition+local*.25f;
             for(float radius=.60f;radius>=.25f;radius-=.05f)
             {
@@ -125,21 +225,41 @@ namespace TabletopMayhem
                 {chosen=new Vector3(x,h,z);break;}
             }
             pipe.localPosition=chosen;
+            pipe.localScale=Vector3.one;
+            arenaCenter=(puff.localPosition+pipe.localPosition)*.5f;arenaCenter.y=pipe.localPosition.y;
+            arenaRadius=FindArenaRadius();SetArenaGrid();SetArenaVisible(true);UpdateArena();
+            audio.PlayOneShot(arenaSweep,.75f);
             enemy.localPosition=pipe.localPosition+Vector3.down*.45f;
             enemy.gameObject.SetActive(true);pipe.gameObject.SetActive(true);status.transform.parent.gameObject.SetActive(true);
-            status.text="THE BEAN REVENANT APPEARS!";
+            status.text="ROUND 1  /  KARATE COMET";
             Debug.Log("PUFF_FIGHT_BEGIN");
         }
         public void End()
         {
             if(!Active)return;Active=false;move=Vector2.zero;shield=false;strikeReady=false;holdingEnemy=false;
-            pipe.gameObject.SetActive(false);enemy.gameObject.SetActive(false);status.transform.parent.gameObject.SetActive(false);
+            pipe.gameObject.SetActive(false);foreach(var fighter in opponents)fighter.Root.gameObject.SetActive(false);
+            SetArenaVisible(false);status.transform.parent.gameObject.SetActive(false);
             foreach(var e in effects)if(e.Body)Object.Destroy(e.Body.gameObject);effects.Clear();
-            if(playerLeft)playerLeft.localRotation=Quaternion.identity;
-            if(playerRight)playerRight.localRotation=Quaternion.identity;
-            if(playerLegLeft)playerLegLeft.localRotation=Quaternion.identity;
-            if(playerLegRight)playerLegRight.localRotation=Quaternion.identity;
+            if(playerLeft)playerLeft.localRotation=playerLeftRest;
+            if(playerRight)playerRight.localRotation=playerRightRest;
+            if(playerLegLeft)playerLegLeft.localRotation=playerLegLeftRest;
+            if(playerLegRight)playerLegRight.localRotation=playerLegRightRest;
+            if(playerVisual){playerVisual.localRotation=Quaternion.identity;playerVisual.localScale=Vector3.one;}
             Debug.Log("PUFF_FIGHT_END");
+        }
+        void NextWave()
+        {
+            if(wave>=opponents.Length-1)return;
+            enemy.gameObject.SetActive(false);wave++;current=opponents[wave];enemyHealth=current.MaxHealth;
+            playerHealth=Mathf.Min(100,playerHealth+22);guardEnergy=100;
+            spawnTime=0;enemyAttack=2.8f;enemyMelee=1.3f;enemyWindup=enemyAir=enemyVertical=0;
+            pipe.localScale=Vector3.one;
+            stun=0;finished=false;holdingEnemy=false;enemyRingOut=false;strikeReady=false;
+            enemy.localPosition=pipe.localPosition+Vector3.down*.45f;enemy.rotation=Quaternion.identity;
+            enemy.gameObject.SetActive(true);status.text="ROUND "+(wave+1)+"  /  "+current.Name.ToUpperInvariant();
+            foreach(var e in effects)if(e.Body)Object.Destroy(e.Body.gameObject);effects.Clear();
+            audio.PlayOneShot(arenaSweep,.75f);Burst(pipe.position+Vector3.up*.15f,current.Spark,16);
+            Debug.Log("PUFF_FIGHT_ROUND "+(wave+1)+" "+current.Name);
         }
         public void Controls(Vector2 movement,bool guard,bool grabHeld)
         {
@@ -173,8 +293,10 @@ namespace TabletopMayhem
                 Vector3 push=delta.sqrMagnitude>.001f?delta.normalized:arena.forward;
                 enemy.position+=push*(pose==1?.045f:.095f);stun=pose==1?.30f:.46f;enemyPose=.36f;
                 enemyVertical=pose==2||comboCount==3?.85f:.34f;hitPause=.045f;
-                Burst(enemy.position+Vector3.up*.30f,new Color(.86f,.44f,1),7);audio.PlayOneShot(impact,.7f);
-                audio.PlayOneShot(beanVoice,.35f);
+                Burst(enemy.position+Vector3.up*.16f,current.Spark,pose==2?12:7);
+                Shockwave(enemy.position+Vector3.up*.16f,pose==2?.20f:.13f,current.Spark);
+                audio.PlayOneShot(impact,pose==2?.9f:.7f);
+                audio.PlayOneShot(voices[wave],.35f);
                 Debug.Log("PUFF_FIGHT_HIT "+pose+" enemy="+enemyHealth);
             }
             else Debug.Log("PUFF_FIGHT_WHIFF "+pose);
@@ -214,7 +336,8 @@ namespace TabletopMayhem
         }
         void Spawn(Vector3 origin,Vector3 velocity,float fuse,int kind,Color color,float size)
         {
-            var ball=PetArt.Shape(null,kind==2?PrimitiveType.Capsule:PrimitiveType.Sphere,origin,Vector3.one*size,color,kind==1?"Five second bomb":kind==2?"Slingshot rocket":"Slime").transform;
+            var ball=PetArt.Shape(null,kind==2?PrimitiveType.Capsule:PrimitiveType.Sphere,origin,Vector3.one*size,color,
+                kind==1?"Five second bomb":kind==2?"Slingshot rocket":wave==2?"Spicy sauce orb":"Karate energy blast").transform;
             if(kind==1)PetArt.Shape(ball,PrimitiveType.Sphere,new Vector3(0,.6f,0),Vector3.one*.23f,PetArt.Gold,"Lit bomb fuse");
             if(kind==2)
             {
@@ -231,9 +354,17 @@ namespace TabletopMayhem
                 effects.Add(new MovingEffect{Body=p,Velocity=Random.insideUnitSphere*.55f+Vector3.up*.25f,Fuse=.45f,Kind=3});
             }
         }
+        void Shockwave(Vector3 at,float radius,Color color)
+        {
+            var root=new GameObject("Combat shockwave").transform;root.position=at;
+            var line=root.gameObject.AddComponent<LineRenderer>();line.useWorldSpace=false;line.loop=true;line.positionCount=36;
+            line.widthMultiplier=.007f;line.material=new Material(Resources.Load<Shader>("PetAimLine"));
+            line.startColor=line.endColor=color;
+            effects.Add(new MovingEffect{Body=root,Fuse=.30f,Radius=radius,Tint=color,Kind=4});
+        }
         void Explode(Vector3 at,float radius)
         {
-            Burst(at,new Color(1,.59f,.18f),20);audio.PlayOneShot(explosion,.9f);
+            Burst(at,new Color(1,.59f,.18f),26);Shockwave(at,radius,new Color(1,.65f,.25f,.90f));audio.PlayOneShot(explosion,.9f);
             if(Vector3.Distance(at,enemy.position+Vector3.up*.2f)<radius)
             {enemyHealth=Mathf.Max(0,enemyHealth-36);stun=.8f;enemyPose=.5f;enemy.position+=(enemy.position-at).normalized*.13f;}
             if(Vector3.Distance(at,puff.position+Vector3.up*.1f)<radius*.7f)
@@ -260,6 +391,8 @@ namespace TabletopMayhem
             dt=Mathf.Min(dt,.05f);
             if(hitPause>0){hitPause-=dt;dt*=.15f;}
             spawnTime+=dt;playerCooldown=Mathf.Max(0,playerCooldown-dt);playerPose=Mathf.Max(0,playerPose-dt);
+            pipe.localScale=Vector3.one*Mathf.Lerp(1,.02f,Mathf.Clamp01((spawnTime-1.15f)/.55f));
+            UpdateArena();
             attackAge+=dt;comboWindow=Mathf.Max(0,comboWindow-dt);
             enemyPose=Mathf.Max(0,enemyPose-dt);stun=Mathf.Max(0,stun-dt);
             guardBreak=Mathf.Max(0,guardBreak-dt);
@@ -282,7 +415,7 @@ namespace TabletopMayhem
                 {
                     Vector3 target=puff.position+travel.normalized*dt*.42f;
                     float h;Vector3 local=arena.InverseTransformPoint(target);
-                    if(Vector2.Distance(new Vector2(local.x,local.z),new Vector2(pipe.localPosition.x,pipe.localPosition.z))<1.15f&&
+                    if(Vector2.Distance(new Vector2(local.x,local.z),new Vector2(arenaCenter.x,arenaCenter.z))<arenaRadius-.05f&&
                        room.Ground(local.x,local.z,pipe.localPosition.y+.5f,out h)&&Mathf.Abs(h-pipe.localPosition.y)<.10f)
                         puff.localPosition=new Vector3(local.x,h+jumpHeight,local.z);
                 }
@@ -305,7 +438,8 @@ namespace TabletopMayhem
                     if(enemyAir<=0&&supported){enemyAir=0;enemyVertical=0;p.y=h;audio.PlayOneShot(impact,.23f);}
                     else p.y=(supported?h:pipe.localPosition.y)+enemyAir;
                     enemy.localPosition=p;
-                    if(!supported&&p.y<pipe.localPosition.y-.25f)
+                    Vector2 offset=new Vector2(p.x-arenaCenter.x,p.z-arenaCenter.z);
+                    if((!supported&&p.y<pipe.localPosition.y-.25f)||offset.magnitude>arenaRadius+.15f)
                     {enemyHealth=0;enemyRingOut=true;Burst(pipe.position+Vector3.up*.12f,PetArt.Gold,18);Debug.Log("PUFF_FIGHT_RING_OUT");}
                 }
                 Vector3 toward=puff.position-enemy.position;toward.y=0;
@@ -315,41 +449,60 @@ namespace TabletopMayhem
                     enemy.rotation=Quaternion.Slerp(enemy.rotation,Quaternion.LookRotation(toward),1-Mathf.Exp(-dt*8));
                     if(distance>.22f&&stun<=0&&!holdingEnemy&&enemyAir<=0)
                     {
-                        Vector3 next=enemy.position+toward.normalized*dt*.13f;
+                        Vector3 next=enemy.position+toward.normalized*dt*current.Speed;
                         var local=arena.InverseTransformPoint(next);float h;
-                        if(room.Ground(local.x,local.z,pipe.localPosition.y+.5f,out h)&&Mathf.Abs(h-pipe.localPosition.y)<.10f)enemy.localPosition=new Vector3(local.x,h,local.z);
+                        if(Vector2.Distance(new Vector2(local.x,local.z),new Vector2(arenaCenter.x,arenaCenter.z))<arenaRadius-.06f&&
+                           room.Ground(local.x,local.z,pipe.localPosition.y+.5f,out h)&&Mathf.Abs(h-pipe.localPosition.y)<.10f)
+                            enemy.localPosition=new Vector3(local.x,h,local.z);
                     }
                 }
                 enemyAttack-=dt;enemyMelee-=dt;
                 if(enemyAttack<=0&&enemyWindup<=0&&stun<=0&&!holdingEnemy)
-                {enemyWindup=.48f;enemyPose=.48f;audio.PlayOneShot(beanVoice,.55f);Debug.Log("PUFF_ENEMY_TELEGRAPH");}
+                {enemyWindup=wave==1?.36f:wave==2?.68f:.48f;enemyPose=enemyWindup;audio.PlayOneShot(voices[wave],.55f);Debug.Log("PUFF_ENEMY_TELEGRAPH "+current.Name);}
                 if(enemyWindup>0)
                 {
                     enemyWindup-=dt;
                     if(enemyWindup<=0&&stun<=0&&!holdingEnemy)
                     {
-                        enemyAttack=Random.Range(2.8f,4.2f);
+                        enemyAttack=wave==1?Random.Range(2.1f,3.2f):wave==2?Random.Range(3.1f,4.5f):Random.Range(2.5f,3.7f);
                         Vector3 from=enemy.position+Vector3.up*.30f;
                         Vector3 aim=(puff.position+Vector3.up*(.12f+jumpHeight)-from).normalized;
-                        Spawn(from,aim*1.18f,2.3f,0,new Color(.33f,.89f,.32f),.037f);
-                        audio.PlayOneShot(whoosh,.55f);Debug.Log("PUFF_ENEMY_SLIME");
+                        if(wave==1)
+                        {
+                            enemyVertical=1.65f;enemyAir=.02f;enemy.position+=toward.normalized*Mathf.Min(.25f,distance*.45f);
+                            Burst(enemy.position+Vector3.up*.10f,current.Spark,7);audio.PlayOneShot(jumpSound,.66f);
+                            Debug.Log("PUFF_CAT_POUNCE");
+                        }
+                        else
+                        {
+                            Spawn(from,aim*(wave==2?1.05f:1.50f),2.3f,0,current.Projectile,wave==2?.055f:.037f);
+                            audio.PlayOneShot(whoosh,.55f);Debug.Log(wave==2?"PUFF_MEATBALL_SAUCE":"PUFF_KARATE_BLAST");
+                        }
                     }
                 }
                 if(distance<.20f&&enemyMelee<=0&&stun<=0&&!holdingEnemy&&jumpHeight<.08f)
-                {enemyMelee=1.45f;enemyPose=.34f;DamagePlayer(8,toward.normalized);}
+                {enemyMelee=wave==1?.88f:wave==2?1.70f:1.28f;enemyPose=.34f;DamagePlayer(wave==2?12:wave==1?7:9,toward.normalized);}
                 if(enemyHealth<=0||playerHealth<=0)
-                {finished=true;screenTime=3.5f;status.text=enemyHealth<=0?(enemyRingOut?"RING OUT!  PUFF WINS!":"PUFF WINS!"):"PUFF NEEDS A BREAK";Debug.Log("PUFF_FIGHT_RESULT "+(enemyHealth<=0?"WIN":"LOSS"));}
+                {finished=true;screenTime=2.5f;status.text=enemyHealth<=0?(enemyRingOut?"RING OUT!":"K.O.!  "+current.Name.ToUpperInvariant()):"PUFF NEEDS A BREAK";
+                 Burst(enemyHealth<=0?enemy.position:puff.position,current.Spark,18);audio.PlayOneShot(explosion,.55f);
+                 Debug.Log("PUFF_FIGHT_RESULT "+(enemyHealth<=0?"WIN":"LOSS")+" round="+(wave+1));}
             }
-            if(finished)screenTime-=dt;
-            if(!finished)status.text=holdingEnemy?"GRABBED! RELEASE GRIP TO THROW":"PUFF "+Mathf.CeilToInt(playerHealth)+"   VS   BEAN "+Mathf.CeilToInt(enemyHealth);
-            float pWidth=.17f*Mathf.Clamp01(playerHealth/100f),eWidth=.17f*Mathf.Clamp01(enemyHealth/150f);
-            puffBar.localScale=new Vector3(Mathf.Max(.001f,pWidth),.014f,.003f);
-            puffBar.localPosition=new Vector3(-.19f+pWidth*.5f,-.029f,-.010f);
-            gloomBar.localScale=new Vector3(Mathf.Max(.001f,eWidth),.014f,.003f);
-            gloomBar.localPosition=new Vector3(.02f+eWidth*.5f,-.029f,-.010f);
-            float gWidth=.38f*guardEnergy/100f;
-            guardBar.localScale=new Vector3(Mathf.Max(.001f,gWidth),.005f,.003f);
-            guardBar.localPosition=new Vector3(-.19f+gWidth*.5f,-.050f,-.010f);
+            if(finished)
+            {
+                screenTime-=dt;
+                if(screenTime<=0&&enemyHealth<=0&&wave<opponents.Length-1)NextWave();
+                else if(screenTime<=0&&enemyHealth<=0)status.text="PUFF CLEARED THE ARENA!";
+            }
+            if(!finished&&spawnTime>=1.2f)status.text=holdingEnemy?"GRABBED! RELEASE GRIP TO THROW":
+                "ROUND "+(wave+1)+"   PUFF "+Mathf.CeilToInt(playerHealth)+"  /  "+current.ShortName+" "+Mathf.CeilToInt(enemyHealth);
+            float pWidth=.21f*Mathf.Clamp01(playerHealth/100f),eWidth=.21f*Mathf.Clamp01(enemyHealth/current.MaxHealth);
+            puffBar.localScale=new Vector3(Mathf.Max(.001f,pWidth),.016f,.003f);
+            puffBar.localPosition=new Vector3(-.23f+pWidth*.5f,-.017f,-.013f);
+            gloomBar.localScale=new Vector3(Mathf.Max(.001f,eWidth),.016f,.003f);
+            gloomBar.localPosition=new Vector3(.02f+eWidth*.5f,-.017f,-.013f);
+            float gWidth=.46f*guardEnergy/100f;
+            guardBar.localScale=new Vector3(Mathf.Max(.001f,gWidth),.007f,.003f);
+            guardBar.localPosition=new Vector3(-.23f+gWidth*.5f,-.049f,-.013f);
             if(shield&&playerPose<=0){pose=3;playerPose=.1f;}
             Vector3 face=enemy.position-puff.position;face.y=0;
             if(face.sqrMagnitude>.001f)puff.rotation=Quaternion.Slerp(puff.rotation,Quaternion.LookRotation(face),1-Mathf.Exp(-dt*12));
@@ -357,16 +510,24 @@ namespace TabletopMayhem
             float normalized=playerPose>0?Mathf.Clamp01(1-playerPose/duration):1;
             float phase=normalized<.30f?-.30f*Mathf.Sin(normalized/.30f*Mathf.PI*.5f):normalized<.64f?Mathf.Sin((normalized-.30f)/.34f*Mathf.PI*.5f):Mathf.Cos((normalized-.64f)/.36f*Mathf.PI*.5f);
             phase=playerPose>0?phase:0;
-            if(playerRight)playerRight.localRotation=Quaternion.Euler(pose==1?-125*phase:pose==3?-48:pose==4?-80:pose==5?-30:0,0,pose==2?75*phase:0);
-            if(playerLeft)playerLeft.localRotation=Quaternion.Euler(pose==2?-42*phase:pose==3?-48:pose==4?-80:pose==5?-30:0,0,pose==2?-65*phase:0);
-            if(playerLegRight)playerLegRight.localRotation=Quaternion.Euler(pose==2?-120*phase:pose==5?-35:0,0,pose==2?28*phase:0);
-            if(playerLegLeft)playerLegLeft.localRotation=Quaternion.Euler(pose==2?35*phase:pose==5?35:0,0,0);
-            enemyRight.localRotation=Quaternion.Euler(enemyPose>0?-65*Mathf.Sin(enemyPose*7):0,0,0);
-            enemyLeft.localRotation=Quaternion.Euler(enemyPose>0?45*Mathf.Sin(enemyPose*7):0,0,0);
-            enemyHead.localRotation=Quaternion.Euler(0,0,Mathf.Sin(Time.time*2)*5+enemyPose*15);
-            enemyBody.localRotation=Quaternion.Euler(enemyPose>0?enemyPose*14:0,0,Mathf.Sin(Time.time*2.1f)*2);
-            enemyLegLeft.localRotation=Quaternion.Euler(Mathf.Sin(Time.time*8)*5,0,0);
-            enemyLegRight.localRotation=Quaternion.Euler(-Mathf.Sin(Time.time*8)*5,0,0);
+            if(playerRight)playerRight.localRotation=playerRightRest*Quaternion.Euler(pose==1?-125*phase:pose==3?-48:pose==4?-80:pose==5?-30:0,0,pose==2?75*phase:0);
+            if(playerLeft)playerLeft.localRotation=playerLeftRest*Quaternion.Euler(pose==2?-42*phase:pose==3?-48:pose==4?-80:pose==5?-30:0,0,pose==2?-65*phase:0);
+            if(playerLegRight)playerLegRight.localRotation=playerLegRightRest*Quaternion.Euler(pose==2?-120*phase:pose==5?-35:0,0,pose==2?28*phase:0);
+            if(playerLegLeft)playerLegLeft.localRotation=playerLegLeftRest*Quaternion.Euler(pose==2?35*phase:pose==5?35:0,0,0);
+            if(playerVisual)
+            {
+                float lean=pose==1?-17*phase:pose==2?-28*phase:pose==3?11:pose==4?-12:0;
+                float twist=pose==2?28*phase:pose==1?12*phase:0;
+                playerVisual.localRotation=Quaternion.Slerp(playerVisual.localRotation,Quaternion.Euler(lean,twist,-8*phase),1-Mathf.Exp(-dt*19));
+                float squash=pose==2?1+.13f*phase:pose==1?1+.07f*phase:1;
+                playerVisual.localScale=Vector3.Lerp(playerVisual.localScale,new Vector3(1/squash,squash,1/squash),1-Mathf.Exp(-dt*16));
+            }
+            if(enemyRight)enemyRight.localRotation=current.RightArmRest*Quaternion.Euler(enemyPose>0?-85*Mathf.Sin(enemyPose*8):0,0,wave==1?-22:0);
+            if(enemyLeft)enemyLeft.localRotation=current.LeftArmRest*Quaternion.Euler(enemyPose>0?65*Mathf.Sin(enemyPose*8):0,0,wave==1?22:0);
+            if(enemyHead)enemyHead.localRotation=current.HeadRest*Quaternion.Euler(0,0,Mathf.Sin(Time.time*2)*5+enemyPose*15);
+            if(enemyBody)enemyBody.localRotation=current.BodyRest*Quaternion.Euler(enemyPose>0?enemyPose*22:0,0,Mathf.Sin(Time.time*(wave==1?4:2.1f))*3);
+            if(enemyLegLeft)enemyLegLeft.localRotation=current.LeftLegRest*Quaternion.Euler(Mathf.Sin(Time.time*(wave==1?13:8))*9,0,0);
+            if(enemyLegRight)enemyLegRight.localRotation=current.RightLegRest*Quaternion.Euler(-Mathf.Sin(Time.time*(wave==1?13:8))*9,0,0);
             pipeRim.localScale=new Vector3(.185f*(1+Mathf.Sin(Time.time*6)*.06f),.016f,.185f*(1+Mathf.Sin(Time.time*6)*.06f));
             UpdateEffects(dt);
         }
@@ -377,6 +538,13 @@ namespace TabletopMayhem
                 var e=effects[i];e.Age+=dt;e.Fuse-=dt;
                 if(e.Kind==3)
                 {e.Body.position+=e.Velocity*dt;e.Velocity+=Physics.gravity*dt*.3f;e.Body.localScale=Vector3.one*.013f*Mathf.Clamp01(e.Fuse/.45f);}
+                else if(e.Kind==4)
+                {
+                    var line=e.Body.GetComponent<LineRenderer>();float p=Mathf.Clamp01(e.Age/.30f),r=e.Radius*p;
+                    Color fade=e.Tint;fade.a*=1-p;line.startColor=line.endColor=fade;
+                    for(int j=0;j<line.positionCount;j++)
+                    {float a=j*2*Mathf.PI/line.positionCount;line.SetPosition(j,new Vector3(Mathf.Cos(a)*r,0,Mathf.Sin(a)*r));}
+                }
                 else
                 {
                     Vector3 old=e.Body.position;e.Velocity+=Physics.gravity*dt*(e.Kind==2?.12f:.55f);
@@ -389,7 +557,7 @@ namespace TabletopMayhem
                     }
                     e.Body.position=next;
                     if(e.Kind==0&&Vector3.Distance(next,puff.position+Vector3.up*.10f)<.13f)
-                    {DamagePlayer(12,(puff.position-next).normalized);Burst(next,new Color(.42f,1,.32f),8);e.Fuse=0;}
+                    {DamagePlayer(wave==2?15:11,(puff.position-next).normalized);Burst(next,current.Projectile,10);e.Fuse=0;}
                     if(e.Kind==2&&e.Velocity.sqrMagnitude>.001f)e.Body.rotation=Quaternion.FromToRotation(Vector3.up,e.Velocity.normalized);
                     if(e.Kind==1)for(int c=0;c<e.Body.childCount;c++)if(c==0)
                         e.Body.GetChild(c).localScale=Vector3.one*(.20f+.1f*Mathf.Sin(Time.time*18));

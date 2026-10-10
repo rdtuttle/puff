@@ -35,6 +35,17 @@ namespace TabletopMayhem
             if(!mouth||!sleepingFace)Debug.LogError("PET_FACE_NODES_MISSING");
             return model;
         }
+        public static Transform Fighter(Transform parent,string resource,string displayName)
+        {
+            var root=new GameObject(displayName).transform;root.SetParent(parent,false);
+            var asset=Resources.Load<GameObject>("Fighters/"+resource);
+            if(!asset){Debug.LogError("FIGHTER_MODEL_MISSING "+resource);return root;}
+            var model=Object.Instantiate(asset,root,false).transform;model.name=resource+" model";
+            if(!modelMaterial){modelMaterial=new Material(Resources.Load<Shader>("MayhemVertex"));modelMaterial.enableInstancing=true;}
+            foreach(var renderer in model.GetComponentsInChildren<MeshRenderer>())
+            {var slots=new Material[renderer.sharedMaterials.Length];for(int i=0;i<slots.Length;i++)slots[i]=modelMaterial;renderer.sharedMaterials=slots;}
+            return root;
+        }
         public static Transform Microphone(Transform parent)
         {
             var mic=new GameObject("Singing microphone").transform;mic.SetParent(parent,false);mic.localPosition=new Vector3(.075f,.11f,-.055f);mic.localRotation=Quaternion.Euler(25,0,-16);

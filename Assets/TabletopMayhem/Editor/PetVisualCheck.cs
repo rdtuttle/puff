@@ -156,12 +156,19 @@ namespace TabletopMayhem.Editor
                 var shadow=GameObject.Find("Soft surface contact shadow");
                 if(!shadow||!shadow.activeInHierarchy)throw new Exception("Puff contact shadow missing after placement");
                 var fight=(PuffFight)typeof(PetGame).GetField("fight",flags).GetValue(game);
+                game.SendMessage("ClosePack");
+                right.SetActive(false);left.SetActive(false);
                 fight.Begin();
-                for(int i=0;i<70;i++)fight.Tick(.02f);
-                if(!fight.Active||!GameObject.Find("The Bean Revenant"))throw new Exception("Fight mode failed to spawn the bean rival");
+                for(int i=0;i<95;i++)fight.Tick(.02f);
+                if(!fight.Active||!GameObject.Find("Karate Comet"))throw new Exception("Fight mode failed to spawn the first rival");
+                var ring=GameObject.Find("Blue holographic arena ring");
+                if(!ring)throw new Exception("Fight arena ring missing");
+                game.SendMessage("UpdateHud");
+                var ringLine=ring.GetComponent<LineRenderer>();
+                if(ringLine.GetPosition(0).magnitude<.05f)throw new Exception("Arena ring did not expand during the entrance");
                 camera.Render();texture.ReadPixels(new Rect(0,0,1600,1000),0,0);texture.Apply();
                 File.WriteAllBytes("Art/Blender/unity-fight-preview.png",texture.EncodeToPNG());
-                var rival=GameObject.Find("The Bean Revenant").transform;
+                var rival=GameObject.Find("Karate Comet").transform;
                 companion.position=rival.position+rival.forward*.18f;
                 fight.Jump();for(int i=0;i<7;i++)fight.Tick(.02f);
                 if(companion.position.y<=rival.position.y+.02f)throw new Exception("Fight jump did not lift Puff");
@@ -179,6 +186,20 @@ namespace TabletopMayhem.Editor
                 for(int i=0;i<260;i++)fight.Tick(.02f);
                 fight.End();
                 if(fight.Active)throw new Exception("Fight mode did not exit cleanly");
+                fight.Begin();
+                for(int round=1;round<3;round++)
+                {
+                    for(int i=0;i<70;i++)fight.Tick(.02f);
+                    typeof(PuffFight).GetField("enemyHealth",flags).SetValue(fight,0f);
+                    fight.Tick(.02f);
+                    for(int i=0;i<130;i++)fight.Tick(.02f);
+                    string next=round==1?"Clawstorm Cat":"Meatball Marauder";
+                    if(!GameObject.Find(next))throw new Exception("Fight did not advance to "+next);
+                    for(int i=0;i<95;i++)fight.Tick(.02f);
+                    camera.Render();texture.ReadPixels(new Rect(0,0,1600,1000),0,0);texture.Apply();
+                    File.WriteAllBytes(round==1?"Art/Blender/unity-cat-fight-preview.png":"Art/Blender/unity-meatball-fight-preview.png",texture.EncodeToPNG());
+                }
+                fight.End();
                 var dayGoal=(CareAction)typeof(PetGame).GetField("dailyGoal",flags).GetValue(game);
                 typeof(PetGame).GetField("dailyDone",flags).SetValue(game,false);
                 int stars=(int)typeof(PetGame).GetField("dailyStars",flags).GetValue(game);
@@ -189,7 +210,7 @@ namespace TabletopMayhem.Editor
                     throw new Exception("Daily care goal did not award exactly one star");
                 camera.targetTexture=null;RenderTexture.active=null;
                 UnityEngine.Object.DestroyImmediate(texture);UnityEngine.Object.DestroyImmediate(rt);
-                Debug.Log("PET_VISUAL_OK Puff title + care loop HUD + microphone task + stable spawn + draggable pack + gloves + blaster + sword + floor + bean fight + jump + throw");EditorApplication.Exit(0);
+                Debug.Log("PET_VISUAL_OK Puff title + care HUD + stable spawn + draggable pack + holographic arena + three fight rounds + jump + punch + kick + throw");EditorApplication.Exit(0);
             }
             catch(Exception e){Debug.LogException(e);EditorApplication.Exit(1);}
         }
